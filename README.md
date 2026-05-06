@@ -31,9 +31,9 @@ Before any attack simulation, the telemetry stack was fully instrumented and val
 
 Sysmon was deployed using the SwiftOnSecurity `sysmonconfig-export.xml` configuration — a production-grade filter set that eliminates high-volume benign telemetry noise while retaining full fidelity on process creation, file writes, registry modifications, and attack-grade network connections. This config is the industry baseline for endpoint visibility in Windows environments.
 
-![Sysmon Binary and Config Ready](01_Sysmon_Binary_And_Config_Ready.png)
+![Sysmon Binary and Config Ready](screenshots/01_Sysmon_Binary_And_Config_Ready.png)
 
-![Sysmon Installation Complete](02_Sysmon_Installation_Complete.png)
+![Sysmon Installation Complete](screenshots/02_Sysmon_Installation_Complete.png)
 
 ### Windows Advanced Audit Policy Configuration
 
@@ -43,19 +43,19 @@ Three audit policy controls were activated on the Domain Controller to ensure Sy
 2. **Include Command Line in Process Creation Events** — enabled to populate `process.command_line` in every Event ID 1 log
 3. **Advanced Audit: Process Creation** — enabled to generate Event ID 4688 / Sysmon Event ID 1 on every process spawn
 
-![Force Audit Policy Subcategory Enabled](03_Force_Audit_Policy_Subcategory_Enabled.png)
+![Force Audit Policy Subcategory Enabled](screenshots/03_Force_Audit_Policy_Subcategory_Enabled.png)
 
-![Include Command Line in Process Creation Enabled](04_Include_Command_Line_In_Process_Creation_Enabled.png)
+![Include Command Line in Process Creation Enabled](screenshots/04_Include_Command_Line_In_Process_Creation_Enabled.png)
 
-![Advanced Audit Process Creation Enabled](05_Advanced_Audit_Process_Creation_Enabled.png)
+![Advanced Audit Process Creation Enabled](screenshots/05_Advanced_Audit_Process_Creation_Enabled.png)
 
 ### Kali Linux Network Attribution
 
 Kali eth1 was assigned static IP `10.0.0.5` to establish a dedicated, deterministic attack interface. All adversary-originated traffic is attributable to this address in SIEM telemetry, eliminating ambiguity between DHCP-assigned addresses and attack-sourced connections.
 
-![Kali Network Interfaces List](06_Kali_Network_Interfaces_List.png)
+![Kali Network Interfaces List](screenshots/06_Kali_Network_Interfaces_List.png)
 
-![Kali Static IP Assigned](07_Kali_Static_IP_Assigned.png)
+![Kali Static IP Assigned](screenshots/07_Kali_Static_IP_Assigned.png)
 
 ### Telemetry Validation
 
@@ -68,7 +68,7 @@ whoami /priv ; echo "Phase0_CommandLine_Verification_Test"
 
 Event ID 3 (Network Connection) returned no results against internal subnet traffic — confirmed as expected behavior. The SwiftOnSecurity config applies `onmatch=exclude` filtering against ICMP and internal subnet activity by design. This is production-grade noise reduction, not a misconfiguration. Event ID 3 will trigger on attack-grade lateral movement.
 
-![Elastic Command Line Verification Success](08_Elastic_Command_Line_Verification_Success.png)
+![Elastic Command Line Verification Success](screenshots/08_Elastic_Command_Line_Verification_Success.png)
 
 **Phase 0 Status: COMPLETE — full forensic telemetry operational, attack simulation cleared to proceed.**
 
@@ -82,31 +82,31 @@ A four-stage attack chain was executed from Kali Linux against the Windows Serve
 
 Initial execution: `whoami` run on the DC to establish process creation telemetry and confirm attacker-controlled execution context. This is the entry point of the kill chain — the first signal visible in SIEM.
 
-![Phase 1 Whoami Execution](09_Phase1_Whoami_Execution.png)
+![Phase 1 Whoami Execution](screenshots/09_Phase1_Whoami_Execution.png)
 
 ### Stage 2 — Payload Staging
 
 Payload staging activity executed on the DC. File creation events generated as part of the staging sequence — the file write artifacts that EQL sequence detection subsequently targets as its second stage trigger.
 
-![Phase 1 Attack Chain Telemetry](10_Phase1_Attack_Chain_Telemetry.png)
+![Phase 1 Attack Chain Telemetry](screenshots/10_Phase1_Attack_Chain_Telemetry.png)
 
 ### Stage 3 — PowerShell Download Execution
 
 PowerShell invoked for remote payload retrieval. `DownloadString` / `IEX` execution pattern used — a high-signal adversary TTP captured in full via Sysmon Event ID 1 with command line argument logging active.
 
-![Phase 1 PowerShell Execution](11_Phase1_PowerShell_Execution.png)
+![Phase 1 PowerShell Execution](screenshots/11_Phase1_PowerShell_Execution.png)
 
 ### Stage 4 — Registry Persistence
 
 Persistence established via Windows Registry Run key modification — `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`. Sysmon Event ID 13 (Registry Value Set) captures this artifact with full key path and value data.
 
-![Phase 1 Persistence Establishment](12_Phase1_Persistence_Establishment.png)
+![Phase 1 Persistence Establishment](screenshots/12_Phase1_Persistence_Establishment.png)
 
 ### Telemetry Verification
 
 All four attack stages confirmed visible in Elastic. Full command line arguments present in Event ID 1 logs. Registry modification artifacts confirmed in Event ID 13. Attack chain telemetry validated before rule development.
 
-![Elastic Attack Telemetry Verification](13_Elastic_Attack_Telemetry_Verification.png)
+![Elastic Attack Telemetry Verification](screenshots/13_Elastic_Attack_Telemetry_Verification.png)
 
 ---
 
@@ -134,9 +134,9 @@ sequence by host.name with maxspan=1h
 
 The detection rule was activated in Elastic Security. The full four-stage attack chain was re-executed end-to-end to validate rule firing under live adversary conditions.
 
-![Multi-Stage Rule Activation](14_Multi_Stage_Rule_Activation.png)
+![Multi-Stage Rule Activation](screenshots/14_Multi_Stage_Rule_Activation.png)
 
-![Full Attack Chain Re-Execution](15_Full_Attack_Chain_Reexecution.png)
+![Full Attack Chain Re-Execution](screenshots/15_Full_Attack_Chain_Reexecution.png)
 
 ---
 
@@ -146,7 +146,7 @@ The EQL sequence rule fired at **7:06 PM EDT, May 5, 2026**.
 
 Both sequence conditions were satisfied: `whoami.exe` process creation followed by a file creation event, correlated on `host.name` within the configured maxspan window. Alert generation confirmed in Elastic Security detection engine.
 
-![EQL Sequence Alert Generation](16_EQL_Sequence_Alert_Generation.png)
+![EQL Sequence Alert Generation](screenshots/16_EQL_Sequence_Alert_Generation.png)
 
 ---
 
