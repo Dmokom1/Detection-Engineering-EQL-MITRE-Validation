@@ -5,24 +5,28 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.0.0] - 2024-06-20
 
 ### Added
-- Initial repository structure
-- Comprehensive README documentation
-- Screenshot evidence from lab exercises
-- LICENSE and .gitignore files
-- CHANGELOG for tracking changes
+- Complete EQL detection rule set for MITRE ATT&CK techniques
+- Lab environment for rule testing and validation
+- Automated testing framework for detection rules
+- False positive analysis documentation
+- Performance benchmarks for detection rules
 
 ### Changed
-- Standardized file naming conventions
-- Enhanced README with first-person narrative
-- Added architecture overview section
-- Improved documentation structure
+- Optimized rule performance based on testing results
+- Improved rule descriptions and documentation
+- Updated MITRE ATT&CK mappings to latest framework
 
 ### Fixed
-- N/A (initial release)
+- Resolved syntax errors in complex EQL queries
+- Fixed timestamp handling in multi-timezone environments
+- Corrected field mappings for various log sources
 
-## Notes
-This project documents hands-on lab work for cybersecurity skill development.
-All activities were performed in isolated lab environments for educational purposes.
+## [0.5.0] - 2024-05-25
+
+### Added
+- Initial EQL rule development
+- Basic testing infrastructure
+- MITRE ATT&CK technique mappings
