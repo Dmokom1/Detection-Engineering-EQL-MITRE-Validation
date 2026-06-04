@@ -38,6 +38,34 @@ This project helped me understand that detection engineering is not just writing
 
 ## Lab Environment
 
+
+## Architecture
+
+```mermaid
+graph TD
+    A[Attack Simulation] --> B[Credential Access]
+    B --> C[Golden Ticket Creation]
+    C --> D[Authentication Bypass]
+    D --> E[Privileged Access]
+    E --> F[Detection & Investigation]
+    F --> G[Remediation]
+    
+    H[Windows Server 2022 DC] --> I[Active Directory]
+    I --> J[Kerberos Authentication]
+    J --> K[SIEM Integration]
+    
+    L[Forensic Tools] --> M[FTK Imager]
+    L --> N[Volatility 3]
+    L --> O[DB Browser for SQLite]
+    
+    P[Defender Perspective] --> Q[Event Log Analysis]
+    P --> R[Memory Forensics]
+    P --> S[Browser Artifact Review]
+```
+
+*Note: This diagram represents the lab environment and investigation workflow.*
+
+
 | Component | Details |
 |---|---|
 | Hypervisor | VMware Workstation Player 17 |
@@ -95,13 +123,13 @@ This phase mattered because an EQL rule cannot work if the required logs or fiel
 
 ---
 
-### Sysmon Binary and Configuration
+## Sysmon Binary and Configuration
 
 Sysmon and the SwiftOnSecurity configuration were prepared on the Windows Server system.
 
 ![Sysmon Binary and Config Ready](screenshots/01_Sysmon_Binary_And_Config_Ready.png)
 
-### What this proved
+## What this proved
 
 This confirmed that the Sysmon binary and configuration file were available before installation.
 
@@ -109,13 +137,13 @@ The SwiftOnSecurity configuration helped reduce noisy telemetry while still coll
 
 ---
 
-### Sysmon Installation
+## Sysmon Installation
 
 Sysmon was installed using the configuration file.
 
 ![Sysmon Installation Complete](screenshots/02_Sysmon_Installation_Complete.png)
 
-### What this proved
+## What this proved
 
 This confirmed that Sysmon installed successfully and started collecting endpoint telemetry.
 
@@ -123,13 +151,13 @@ This was the first telemetry gate. Without Sysmon running, the file and process 
 
 ---
 
-### Audit Policy Subcategory Enforcement
+## Audit Policy Subcategory Enforcement
 
 Windows audit policy subcategory enforcement was enabled.
 
 ![Force Audit Policy Subcategory Enabled](screenshots/03_Force_Audit_Policy_Subcategory_Enabled.png)
 
-### What this proved
+## What this proved
 
 This confirmed that granular audit policy settings were enabled and would take priority over broader audit policy categories.
 
@@ -137,13 +165,13 @@ This helped ensure that the specific process creation settings applied correctly
 
 ---
 
-### Command-Line Logging for Process Creation
+## Command-Line Logging for Process Creation
 
 Command-line logging was enabled for process creation events.
 
 ![Include Command Line in Process Creation Enabled](screenshots/04_Include_Command_Line_In_Process_Creation_Enabled.png)
 
-### What this proved
+## What this proved
 
 This confirmed that process command-line arguments would be included in process creation telemetry.
 
@@ -151,13 +179,13 @@ This mattered because command-line visibility is often the difference between se
 
 ---
 
-### Advanced Audit Process Creation
+## Advanced Audit Process Creation
 
 Advanced Audit Policy was configured to capture process creation events.
 
 ![Advanced Audit Process Creation Enabled](screenshots/05_Advanced_Audit_Process_Creation_Enabled.png)
 
-### What this proved
+## What this proved
 
 This confirmed that process creation auditing was enabled for success and failure events.
 
@@ -175,7 +203,7 @@ A static IP address was then assigned to `eth1`.
 
 ![Kali Static IP Assigned](screenshots/07_Kali_Static_IP_Assigned.png)
 
-### What this proved
+## What this proved
 
 This confirmed that Kali had a stable lab address for testing.
 
@@ -197,7 +225,7 @@ Before running the attack simulation, I validated that Elastic was receiving pro
 
 ![Elastic Command Line Verification Success](screenshots/08_Elastic_Command_Line_Verification_Success.png)
 
-### What this proved
+## What this proved
 
 This screenshot confirmed that `process.command_line` was populated in Elastic.
 
@@ -222,13 +250,13 @@ This was a controlled lab sequence. It should be understood as detection practic
 
 ---
 
-### Stage 1: `whoami` Execution
+## Stage 1: `whoami` Execution
 
 The first activity was running `whoami` on the Domain Controller.
 
 ![Phase 1 Whoami Execution](screenshots/09_Phase1_Whoami_Execution.png)
 
-### What this proved
+## What this proved
 
 This confirmed execution under the `cs\administrator` context.
 
@@ -238,7 +266,7 @@ That is why the final detection did not alert on `whoami.exe` alone. It used `wh
 
 ---
 
-### Stage 2: File Creation and Early Attack Telemetry
+## Stage 2: File Creation and Early Attack Telemetry
 
 A file was staged by copying `calc.exe` to `C:\Users\Public\payload.exe`.
 
@@ -246,7 +274,7 @@ The simulation also included a DNS lookup attempt for a suspicious domain.
 
 ![Phase 1 Attack Chain Telemetry](screenshots/10_Phase1_Attack_Chain_Telemetry.png)
 
-### What this proved
+## What this proved
 
 This screenshot supports two important pieces of activity:
 
@@ -259,13 +287,13 @@ The file creation event became the second stage of the final EQL sequence rule.
 
 ---
 
-### Stage 3: PowerShell Download Attempt
+## Stage 3: PowerShell Download Attempt
 
 PowerShell was used to attempt remote script retrieval with `DownloadString`.
 
 ![Phase 1 PowerShell Execution](screenshots/11_Phase1_PowerShell_Execution.png)
 
-### What this proved
+## What this proved
 
 This screenshot shows a PowerShell download attempt using:
 
@@ -279,13 +307,13 @@ From a detection perspective, the command line is still useful because `IEX`, `D
 
 ---
 
-### Stage 4: Registry Persistence Simulation
+## Stage 4: Registry Persistence Simulation
 
 A registry Run key was added to simulate persistence.
 
 ![Phase 1 Persistence Establishment](screenshots/12_Phase1_Persistence_Establishment.png)
 
-### What this proved
+## What this proved
 
 This confirmed that a Run key value was added under:
 
@@ -305,7 +333,7 @@ After the attack simulation, Elastic was used to review whether the activity app
 
 ![Elastic Attack Telemetry Verification](screenshots/13_Elastic_Attack_Telemetry_Verification.png)
 
-### What this proved
+## What this proved
 
 This screenshot confirmed that Elastic contained process-related telemetry from the activity, including PowerShell-related events.
 
@@ -326,7 +354,7 @@ Both events had to occur on the same host within the configured time window.
 
 ![Multi-Stage Rule Activation](screenshots/14_Multi_Stage_Rule_Activation.png)
 
-### EQL Rule
+## EQL Rule
 
 ```eql
 sequence by host.name with maxspan=1h
@@ -334,7 +362,7 @@ sequence by host.name with maxspan=1h
   [file where file.path : "C:\\Users\\Public\\payload.exe"]
 ```
 
-### Why this rule was built this way
+## Why this rule was built this way
 
 The rule was intentionally simple and focused.
 
@@ -342,7 +370,7 @@ The rule was intentionally simple and focused.
 
 The `host.name` correlation matters because it prevents unrelated events from different machines from satisfying the same sequence.
 
-### What this rule does not detect
+## What this rule does not detect
 
 This rule does not detect the entire attack chain.
 
@@ -363,7 +391,7 @@ After enabling the rule, the attack sequence was re-run to validate whether Elas
 
 ![Full Attack Chain Re-Execution](screenshots/15_Full_Attack_Chain_Reexecution.png)
 
-### What this proved
+## What this proved
 
 This showed the test activity being re-executed after the EQL rule was enabled.
 
@@ -373,13 +401,13 @@ Again, the PowerShell download attempt failed because the remote server was unre
 
 ---
 
-### Alert Generation
+## Alert Generation
 
 Elastic generated an alert for the EQL sequence rule.
 
 ![EQL Sequence Alert Generation](screenshots/16_EQL_Sequence_Alert_Generation.png)
 
-### What this proved
+## What this proved
 
 This confirmed that the EQL sequence rule fired successfully.
 
@@ -401,7 +429,7 @@ MITRE ATT&CK coverage was reviewed using the Security Onion coverage view.
 
 ![MITRE ATT&CK Detection Coverage](screenshots/17_MITRE_ATT&CK_Detection_Coverage.png)
 
-### What this proved
+## What this proved
 
 This screenshot showed mapped rule coverage across ATT&CK techniques.
 
@@ -519,3 +547,25 @@ If I expanded this project, I would improve it by:
 | `screenshots/15_Full_Attack_Chain_Reexecution.png` | Attack sequence re-executed for validation |
 | `screenshots/16_EQL_Sequence_Alert_Generation.png` | EQL alert generated successfully |
 | `screenshots/17_MITRE_ATT&CK_Detection_Coverage.png` | MITRE ATT&CK coverage overview |
+
+---
+
+## Repository Information
+
+**Project**: Detection-Engineering-EQL-MITRE-Validation
+**Author**: Dmokom1  
+**Purpose**: Hands-on cybersecurity lab for skill development
+**Environment**: Isolated home lab with Windows Server 2022 DC
+**Tools**: See "Tools Used" section above
+
+### Usage Notes:
+- This repository documents a learning exercise, not production code
+- All screenshots are from controlled lab environments
+- Techniques demonstrated are for educational purposes only
+- Always follow organizational policies and legal guidelines
+
+### Contributing:
+While this is primarily a personal learning portfolio, suggestions and feedback are welcome. Please open an issue to discuss improvements.
+
+### License:
+MIT License - see [LICENSE](LICENSE) file for details.
