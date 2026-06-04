@@ -60,7 +60,7 @@ graph TD
     P[Defender Perspective] --> Q[Event Log Analysis]
     P --> R[Memory Forensics]
     P --> S[Browser Artifact Review]
-```eql
+```
 
 *Note: This diagram represents the lab environment and investigation workflow.*
 
