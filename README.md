@@ -4,7 +4,7 @@ This project was completed in an isolated Active Directory lab built for detecti
 
 ---
 
-## Overview
+## Project Overview
 
 This project focuses on building and validating a small Elastic EQL detection workflow from the ground up.
 
@@ -19,7 +19,7 @@ The project also includes supporting activity such as a PowerShell download atte
 
 ---
 
-## Why I Built This
+## Why I Built This Project
 
 Detection rules are only useful when the telemetry behind them is working.
 
@@ -36,8 +36,7 @@ This project helped me understand that detection engineering is not just writing
 
 ---
 
-## Lab Environment
-
+## Lab Environment & Architecture
 
 ## Architecture
 
@@ -61,10 +60,9 @@ graph TD
     P[Defender Perspective] --> Q[Event Log Analysis]
     P --> R[Memory Forensics]
     P --> S[Browser Artifact Review]
-```
+```eql
 
 *Note: This diagram represents the lab environment and investigation workflow.*
-
 
 | Component | Details |
 |---|---|
@@ -81,7 +79,7 @@ graph TD
 
 ---
 
-## Tools Used
+## Tools & Technologies Used
 
 | Tool | Purpose |
 |---|---|
@@ -127,7 +125,7 @@ This phase mattered because an EQL rule cannot work if the required logs or fiel
 
 Sysmon and the SwiftOnSecurity configuration were prepared on the Windows Server system.
 
-![Sysmon Binary and Config Ready](screenshots/01_Sysmon_Binary_And_Config_Ready.png)
+![Lab Screenshot](screenshots/01_Sysmon_Binary_And_Config_Ready.png)
 
 ## What this proved
 
@@ -141,7 +139,7 @@ The SwiftOnSecurity configuration helped reduce noisy telemetry while still coll
 
 Sysmon was installed using the configuration file.
 
-![Sysmon Installation Complete](screenshots/02_Sysmon_Installation_Complete.png)
+![Lab Screenshot](screenshots/02_Sysmon_Installation_Complete.png)
 
 ## What this proved
 
@@ -155,7 +153,7 @@ This was the first telemetry gate. Without Sysmon running, the file and process 
 
 Windows audit policy subcategory enforcement was enabled.
 
-![Force Audit Policy Subcategory Enabled](screenshots/03_Force_Audit_Policy_Subcategory_Enabled.png)
+![Lab Screenshot](screenshots/03_Force_Audit_Policy_Subcategory_Enabled.png)
 
 ## What this proved
 
@@ -169,7 +167,7 @@ This helped ensure that the specific process creation settings applied correctly
 
 Command-line logging was enabled for process creation events.
 
-![Include Command Line in Process Creation Enabled](screenshots/04_Include_Command_Line_In_Process_Creation_Enabled.png)
+![Lab Screenshot](screenshots/04_Include_Command_Line_In_Process_Creation_Enabled.png)
 
 ## What this proved
 
@@ -183,7 +181,7 @@ This mattered because command-line visibility is often the difference between se
 
 Advanced Audit Policy was configured to capture process creation events.
 
-![Advanced Audit Process Creation Enabled](screenshots/05_Advanced_Audit_Process_Creation_Enabled.png)
+![Lab Screenshot](screenshots/05_Advanced_Audit_Process_Creation_Enabled.png)
 
 ## What this proved
 
@@ -197,11 +195,11 @@ Together, Sysmon and Windows audit policy gave the lab enough visibility to test
 
 Kali Linux had multiple network interfaces. I reviewed the interface list before assigning a static address.
 
-![Kali Network Interfaces List](screenshots/06_Kali_Network_Interfaces_List.png)
+![Lab Screenshot](screenshots/06_Kali_Network_Interfaces_List.png)
 
 A static IP address was then assigned to `eth1`.
 
-![Kali Static IP Assigned](screenshots/07_Kali_Static_IP_Assigned.png)
+![Lab Screenshot](screenshots/07_Kali_Static_IP_Assigned.png)
 
 ## What this proved
 
@@ -223,7 +221,7 @@ This helped keep the test environment predictable when reviewing source or desti
 
 Before running the attack simulation, I validated that Elastic was receiving process command-line data.
 
-![Elastic Command Line Verification Success](screenshots/08_Elastic_Command_Line_Verification_Success.png)
+![Lab Screenshot](screenshots/08_Elastic_Command_Line_Verification_Success.png)
 
 ## What this proved
 
@@ -254,7 +252,7 @@ This was a controlled lab sequence. It should be understood as detection practic
 
 The first activity was running `whoami` on the Domain Controller.
 
-![Phase 1 Whoami Execution](screenshots/09_Phase1_Whoami_Execution.png)
+![Lab Screenshot](screenshots/09_Phase1_Whoami_Execution.png)
 
 ## What this proved
 
@@ -272,7 +270,7 @@ A file was staged by copying `calc.exe` to `C:\Users\Public\payload.exe`.
 
 The simulation also included a DNS lookup attempt for a suspicious domain.
 
-![Phase 1 Attack Chain Telemetry](screenshots/10_Phase1_Attack_Chain_Telemetry.png)
+![Lab Screenshot](screenshots/10_Phase1_Attack_Chain_Telemetry.png)
 
 ## What this proved
 
@@ -291,7 +289,7 @@ The file creation event became the second stage of the final EQL sequence rule.
 
 PowerShell was used to attempt remote script retrieval with `DownloadString`.
 
-![Phase 1 PowerShell Execution](screenshots/11_Phase1_PowerShell_Execution.png)
+![Lab Screenshot](screenshots/11_Phase1_PowerShell_Execution.png)
 
 ## What this proved
 
@@ -311,7 +309,7 @@ From a detection perspective, the command line is still useful because `IEX`, `D
 
 A registry Run key was added to simulate persistence.
 
-![Phase 1 Persistence Establishment](screenshots/12_Phase1_Persistence_Establishment.png)
+![Lab Screenshot](screenshots/12_Phase1_Persistence_Establishment.png)
 
 ## What this proved
 
@@ -331,7 +329,7 @@ This supported the persistence portion of the lab. However, this registry step w
 
 After the attack simulation, Elastic was used to review whether the activity appeared in telemetry.
 
-![Elastic Attack Telemetry Verification](screenshots/13_Elastic_Attack_Telemetry_Verification.png)
+![Lab Screenshot](screenshots/13_Elastic_Attack_Telemetry_Verification.png)
 
 ## What this proved
 
@@ -352,7 +350,7 @@ It looked for:
 
 Both events had to occur on the same host within the configured time window.
 
-![Multi-Stage Rule Activation](screenshots/14_Multi_Stage_Rule_Activation.png)
+![Lab Screenshot](screenshots/14_Multi_Stage_Rule_Activation.png)
 
 ## EQL Rule
 
@@ -389,7 +387,7 @@ Those activities were reviewed as supporting telemetry, but the final EQL alert 
 
 After enabling the rule, the attack sequence was re-run to validate whether Elastic would generate an alert.
 
-![Full Attack Chain Re-Execution](screenshots/15_Full_Attack_Chain_Reexecution.png)
+![Lab Screenshot](screenshots/15_Full_Attack_Chain_Reexecution.png)
 
 ## What this proved
 
@@ -405,7 +403,7 @@ Again, the PowerShell download attempt failed because the remote server was unre
 
 Elastic generated an alert for the EQL sequence rule.
 
-![EQL Sequence Alert Generation](screenshots/16_EQL_Sequence_Alert_Generation.png)
+![Lab Screenshot](screenshots/16_EQL_Sequence_Alert_Generation.png)
 
 ## What this proved
 
@@ -427,7 +425,7 @@ This validated the rule logic in the lab environment.
 
 MITRE ATT&CK coverage was reviewed using the Security Onion coverage view.
 
-![MITRE ATT&CK Detection Coverage](screenshots/17_MITRE_ATT&CK_Detection_Coverage.png)
+![Lab Screenshot](screenshots/17_MITRE_ATT&CK_Detection_Coverage.png)
 
 ## What this proved
 
@@ -466,7 +464,7 @@ That gave enough time for the staged behavior to occur while still keeping the e
 
 ---
 
-## Key Findings
+## Key Findings & Analysis
 
 ### 1. Telemetry validation came before rule writing
 

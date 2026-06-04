@@ -1,3 +1,10 @@
+# Build Notes: Detection-Engineering-EQL-MITRE-Validation
+
+*This document provides detailed technical context for the lab build.*
+*Generated: 2026-06-03*
+
+---
+
 # Build Notes
 # Detection Engineering: EQL Sequence Rule and MITRE ATT&CK Validation
 
