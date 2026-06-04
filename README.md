@@ -565,5 +565,3 @@ If I expanded this project, I would improve it by:
 ### Contributing:
 While this is primarily a personal learning portfolio, suggestions and feedback are welcome. Please open an issue to discuss improvements.
 
-### License:
-MIT License - see [LICENSE](LICENSE) file for details.
