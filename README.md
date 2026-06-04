@@ -41,25 +41,31 @@ This project helped me understand that detection engineering is not just writing
 ## Architecture
 
 ```mermaid
-graph TD
-    A[Attack Simulation] --> B[Credential Access]
-    B --> C[Golden Ticket Creation]
-    C --> D[Authentication Bypass]
-    D --> E[Privileged Access]
-    E --> F[Detection & Investigation]
-    F --> G[Remediation]
+graph LR
+    subgraph "Data Sources"
+        A[Windows Event Logs]
+        B[Elastic Agent]
+        C[Sysmon]
+    end
     
-    H[Windows Server 2022 DC] --> I[Active Directory]
-    I --> J[Kerberos Authentication]
-    J --> K[SIEM Integration]
+    subgraph "SIEM Platform"
+        D[Security Onion]
+        E[Elastic Stack]
+    end
     
-    L[Forensic Tools] --> M[FTK Imager]
-    L --> N[Volatility 3]
-    L --> O[DB Browser for SQLite]
+    subgraph "Detection"
+        F[EQL Rules]
+        G[Sigma Rules]
+        H[Alert Generation]
+    end
     
-    P[Defender Perspective] --> Q[Event Log Analysis]
-    P --> R[Memory Forensics]
-    P --> S[Browser Artifact Review]
+    A --> D
+    B --> E
+    C --> D
+    D --> F
+    E --> F
+    F --> G
+    G --> H
 ```
 
 *Note: This diagram represents the lab environment and investigation workflow.*
